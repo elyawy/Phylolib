@@ -293,6 +293,72 @@ void NJalg::UpdateDistanceTableAndCurrentNodes(vector<tree::nodeP>& currentNodes
 }
 
 /*
+* This function does what UpdateDistanceTableAndCurrentNodes does but more efficiently
+* without allocating new memory. It is also written in a more elegant way that is understandable:
+* we want to replace two nodes with a new one using an equation so we will iterate over
+* each row in the table that holds the distances between the nodes.
+* In each row we will add the new node distance using an equation, The equation changes depending if 
+* the row index is smaller than the nodes that should be replaced between them or larger than them.
+* after we added the new node distance to the row we will erase the old nodes distances.
+*/
+void NJalg::UpdateDistanceTableAndCurrentNodesInPlace(vector<tree::nodeP>& currentNodes,
+											   VVdouble& distanceTable,
+											   tree::nodeP nodeI,
+											   tree::nodeP nodeJ,
+											   tree::nodeP theNewNode,
+											   int Iplace,
+											   int Jplace) {
+	//	Iplace and Jplace are the indexes of i and j in the input currentNodes vector
+	int k;
+	int low_index, high_index;
+	int distance_table_length = currentNodes.size();
+
+	//for several reasons it is much easier to understand this algorithm if you know which index is larger Iplace
+	//or Jplace so we'll put them in new variables in the correct order
+	if (Iplace < Jplace) {
+		low_index = Iplace;
+		high_index = Jplace;
+	} else {
+		high_index = Iplace;
+		low_index = Jplace;
+	}
+
+	//erase the nodes from the node vector and add the new one in their stead
+	currentNodes.erase(currentNodes.begin()+high_index);
+	currentNodes.erase(currentNodes.begin()+low_index);
+	currentNodes.push_back(theNewNode);
+
+	MDOUBLE disIJ = distanceTable[low_index][high_index];
+	for (k=0; k < low_index; k++){          /*disIK                 disIJ   disJK*/
+		distanceTable[k].push_back(0.5*(distanceTable[k][low_index]-disIJ+distanceTable[k][high_index]));//EQ. 43 SWOFFORD PAGE 489.
+		distanceTable[k].erase(distanceTable[k].begin() + high_index);
+		distanceTable[k].erase(distanceTable[k].begin() + low_index);
+	}
+	for (++k; k < high_index; k++) {
+		distanceTable[k].push_back(0.5*(distanceTable[low_index][k]-disIJ+distanceTable[k][high_index]));//EQ. 43 SWOFFORD PAGE 489.
+		distanceTable[k].erase(distanceTable[k].begin() + high_index);
+		distanceTable[k].erase(distanceTable[k].begin() + low_index);
+	}
+	for (++k; k < distance_table_length; k++){
+		distanceTable[k].push_back(0.5*(distanceTable[low_index][k]-disIJ+distanceTable[high_index][k]));//EQ. 43 SWOFFORD PAGE 489.
+		distanceTable[k].erase(distanceTable[k].begin() + high_index);
+		distanceTable[k].erase(distanceTable[k].begin() + low_index);
+	}
+	distanceTable.erase(distanceTable.begin() + high_index);
+	distanceTable.erase(distanceTable.begin() + low_index);	
+}
+
+struct node_vector_data {
+	vector<tree::nodeP> &currentNodes;
+	tree::nodeP aNewNode;
+	int high_index;
+	int low_index;
+
+	node_vector_data(vector<tree::nodeP> &currentNodes, tree::nodeP aNewNode,int high_index,int low_index) :
+		currentNodes(currentNodes), aNewNode(aNewNode), high_index(high_index), low_index(low_index){}
+};
+
+/*
 NJalg::NJalg(){
 	_myET = NULL;
 }
