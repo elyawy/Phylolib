@@ -8,6 +8,7 @@
 #include "errorMsg.h"
 #include "logFile.h"
 #include "treeUtil.h"
+#include "threads.h"
 #include <cassert>
 #include <algorithm>
 #include <map>
@@ -358,6 +359,143 @@ struct node_vector_data {
 		currentNodes(currentNodes), aNewNode(aNewNode), high_index(high_index), low_index(low_index){}
 };
 
+struct node_vector_data {
+	vector<tree::nodeP> &currentNodes;
+	tree::nodeP aNewNode;
+	int high_index;
+	int low_index;
+
+	node_vector_data(vector<tree::nodeP> &currentNodes, tree::nodeP aNewNode,int high_index,int low_index) :
+		currentNodes(currentNodes), aNewNode(aNewNode), high_index(high_index), low_index(low_index){}
+};
+
+void *replace_nodes_with_new(void *args)
+{
+	struct node_vector_data *nodes = (struct node_vector_data *)args;
+	vector<tree::nodeP>& currentNodes = nodes->currentNodes;
+	currentNodes.erase(currentNodes.begin()+nodes->high_index);
+	currentNodes.erase(currentNodes.begin()+nodes->low_index);
+	currentNodes.push_back(nodes->aNewNode);
+
+	return NULL;
+}
+
+struct distance_table_data {
+	VVdouble *distanceTable;
+	int start_index;
+	int last_index;
+	int high_index_to_remove;
+	int low_index_to_remove;
+    void update_distance_table_fields(VVdouble *distanceTable, int start_index, int last_index, int high_index_to_remove, int low_index_to_remove)
+	{
+          distanceTable = distanceTable;
+          start_index = start_index;
+          last_index = last_index;
+          high_index_to_remove = high_index_to_remove;
+          low_index_to_remove = low_index_to_remove;
+	}
+	distance_table_data() = default;
+	~distance_table_data() = default;
+};
+
+
+#define MIN(x, y) ((x) < (y) ? (x) : (y))
+
+void *replace_nodes_with_new_in_distance_table(void *args)
+{
+	struct distance_table_data *distance_table_data = (struct distance_table_data *)args;
+	VVdouble& distanceTable = *(distance_table_data->distanceTable);
+	int distance_table_length = distanceTable[0].size();
+	int start_index = distance_table_data->start_index;
+	int last_index = distance_table_data->last_index;
+	MDOUBLE disIJ = distanceTable[distance_table_data->low_index_to_remove][distance_table_data->high_index_to_remove];
+
+	int low_index = MIN(last_index, distance_table_data->low_index_to_remove);
+	int high_index = MIN(last_index, distance_table_data->high_index_to_remove);
+	last_index = MIN(last_index, distance_table_length);//we can't have the last index be bigger then the table size
+	int k;
+
+	for (k=start_index; k < low_index; k++){          /*disIK                 disIJ   disJK*/
+		distanceTable[k].push_back(0.5*(distanceTable[k][low_index]-disIJ+distanceTable[k][high_index]));//EQ. 43 SWOFFORD PAGE 489.
+		distanceTable[k].erase(distanceTable[k].begin() + high_index);
+		distanceTable[k].erase(distanceTable[k].begin() + low_index);
+	}
+	for (; k < high_index; k++) {
+		distanceTable[k].push_back(0.5*(distanceTable[low_index][k]-disIJ+distanceTable[k][high_index]));//EQ. 43 SWOFFORD PAGE 489.
+		distanceTable[k].erase(distanceTable[k].begin() + high_index);
+		distanceTable[k].erase(distanceTable[k].begin() + low_index);
+	}
+	for (; k < last_index; k++){
+		distanceTable[k].push_back(0.5*(distanceTable[low_index][k]-disIJ+distanceTable[high_index][k]));//EQ. 43 SWOFFORD PAGE 489.
+		distanceTable[k].erase(distanceTable[k].begin() + high_index);
+		distanceTable[k].erase(distanceTable[k].begin() + low_index);
+	}
+
+	return NULL;
+}
+
+/*
+ * A multicore lockless algorithm to improve the UpdateDistanceTableAndCurrentNodesInPlace
+ * function by dividing the work between different cores. should scale linearly by
+ * the number of cores.
+ */
+void NJalg::UpdateDistanceTableAndCurrentNodesMulticore(vector<tree::nodeP>& currentNodes,
+											   VVdouble& distanceTable,
+											   tree::nodeP nodeI,
+											   tree::nodeP nodeJ,
+											   tree::nodeP theNewNode,
+											   int Iplace,
+											   int Jplace) {
+	int low_index_to_remove, high_index_to_remove;
+	int distance_table_length = currentNodes.size();
+	int nodes_per_core;
+
+	//for several reasons it is much easier to understand this algorithm if you know which index is larger Iplace
+	//or Jplace so we'll put them in a snew variables in the correct order
+	if (Iplace < Jplace) {
+		low_index_to_remove = Iplace;
+		high_index_to_remove = Jplace;
+	} else {
+		high_index_to_remove = Iplace;
+		low_index_to_remove = Jplace;
+	}
+
+	//multicore implementation dividing the work between workers:
+	struct distance_table_data distance_table_data[MAX_THREADS];//data each worker will need for his work
+	size_t number_of_cores = NUM_OF_WORKERS-1;//there is one core which is saved for replacing the nodes in currentNodes vector
+											 //while all the others will work in adjusting the distance table
+	size_t number_of_nodes_per_core = 0;
+
+	number_of_nodes_per_core = distance_table_length/number_of_cores;
+	//In case we have more cores than nodes we will reduce the number of cores to the number of nodes
+	//as two cores can't work on 1 node effectively with lockless algorithm
+	if (0  == number_of_nodes_per_core){
+		number_of_nodes_per_core = 1;
+		number_of_cores = distance_table_length;
+	}
+
+	number_of_cores++;//should keep one core for the reminder nodes: In C integer math 5/2=2
+		                  // while 2*2=4 so if we use only 2 cores we will need another core for the fifth node
+	//initialize the structs for each core and set it to work
+	int start_index = 0;
+	int last_index = number_of_nodes_per_core;
+	int core_num;
+	for (core_num=0; core_num<number_of_cores; ++core_num) {
+		/*we iniate the struct with it's Ctor for each worker:*/
+		distance_table_data[core_num].update_distance_table_fields(&distanceTable, start_index, last_index, high_index_to_remove, low_index_to_remove);
+		last_index += number_of_nodes_per_core;//we let the workers themselves check if it is out of bounds
+		start_index = last_index;
+		schedule_work(replace_nodes_with_new_in_distance_table, &distance_table_data[core_num], core_num);
+	}
+
+
+	struct node_vector_data node_vector_data(currentNodes, theNewNode, high_index_to_remove, low_index_to_remove);
+	schedule_work(replace_nodes_with_new, &node_vector_data, core_num);
+	check_that_work_is_done(0, core_num);
+
+	distanceTable.erase(distanceTable.begin() + high_index_to_remove);
+	distanceTable.erase(distanceTable.begin() + low_index_to_remove);
+}
 /*
 NJalg::NJalg(){
 	_myET = NULL;
