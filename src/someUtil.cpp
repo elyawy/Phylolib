@@ -740,7 +740,7 @@ MDOUBLE calcPearsonCorrelation(const Vdouble& oneRatesVec, const Vdouble& otherR
 }
 
 /********************************************************************************************
-Benjamini–Hochberg–Yekutieli procedure controls the false discovery rate
+Benjaminiï¿½Hochbergï¿½Yekutieli procedure controls the false discovery rate
 *********************************************************************************************/
 MDOUBLE computeFDRthreshold(Vdouble& pVals, MDOUBLE levelOfFDRcontroled, bool isPValsSorted){
 	MDOUBLE FDRthreshold = 0;
