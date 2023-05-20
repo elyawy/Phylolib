@@ -106,7 +106,7 @@ void NJalg::NJiterate(tree& et,
 	updateBranchDistance(distanceTable,rVector,theNewNode,nodeI,nodeJ,minRaw,minCol);
 	//CHECK6
 		et.create_names_to_internal_nodes();
-	UpdateDistanceTableAndCurrentNodes(currentNodes,distanceTable,nodeI,nodeJ,theNewNode,minRaw,minCol);
+	UpdateDistanceTableAndCurrentNodesMulticore(currentNodes,distanceTable,nodeI,nodeJ,theNewNode,minRaw,minCol);
 }
 
 void NJalg::NJiterate(tree& et,
@@ -132,7 +132,7 @@ void NJalg::NJiterate(tree& et,
 	updateBranchDistance(distanceTable,rMatrix,theNewNode,nodeI,nodeJ,minRaw,minCol);
 	//CHECK6
 		et.create_names_to_internal_nodes();
-	UpdateDistanceTableAndCurrentNodes(currentNodes,distanceTable,nodeI,nodeJ,theNewNode,minRaw,minCol);
+	UpdateDistanceTableAndCurrentNodesMulticore(currentNodes,distanceTable,nodeI,nodeJ,theNewNode,minRaw,minCol);
 	LOGDO(15,et.output(myLog::LogFile(),tree::ANCESTORID));
 
 }
