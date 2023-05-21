@@ -16,6 +16,9 @@ namespace aaDef {
 }
 
 class aaJC : public replacementModel {
+private:
+	mutable MDOUBLE cached_exponent;
+	mutable MDOUBLE cached_d;
 public:
 
 	virtual replacementModel* clone() const { return new aaJC(*this); }// see note down:
@@ -24,20 +27,32 @@ public:
 
 	explicit aaJC(){};
 	const MDOUBLE Pij_t(const int i,const int j, const MDOUBLE d) const {
+		if (d != cached_d) {//could be a bug if d==0 in the first call
+			cached_exponent = exp(aaDef::m_alDiv_omalp*d);
+			cached_d = d;
+		}
 //(wrong!)		return ((i==j) ?  0.05+0.95*exp(-20.0*d): 0.05-0.05*exp(-20.0*d));
-		return ((i==j) ?  aaDef::odAl+aaDef::om_odAl*exp(aaDef::m_alDiv_omalp*d): aaDef::odAl-aaDef::odAl*exp(aaDef::m_alDiv_omalp*d));
+		return ((i==j) ?  aaDef::odAl*(1+cached_exponent): aaDef::odAl*(1-cached_exponent));
 
 	}
 
 	const MDOUBLE dPij_dt(const int i,const int j, const MDOUBLE d) const{
 		//(worng!)return ((i==j) ?  -19.0*exp(-20.0*d): exp(-20.0*d));
-		return ((i==j) ?  -exp(aaDef::m_alDiv_omalp*d): exp(aaDef::m_alDiv_omalp*d)/(aaDef::Alp-1));
+		if (d != cached_d) {
+			cached_exponent = exp(aaDef::m_alDiv_omalp*d);
+			cached_d = d;
+		}
+		return ((i==j) ?  -cached_exponent: cached_exponent/(aaDef::Alp-1));
 	}
 	const MDOUBLE freq(const size_t i) const {return aaDef::odAl;};
 
 	const MDOUBLE d2Pij_dt2(const int i,const int j, const MDOUBLE d) const{
 	//(wrong!)	return ((i==j) ?  19.0*20.0*exp(-20.0*d): 0.0-20.0*exp(-20.0*d));
-		return ((i==j) ?  aaDef::alDiv_omalp*exp(aaDef::m_alDiv_omalp*d): aaDef::m_alDiv_omalp*exp(aaDef::m_alDiv_omalp*d));
+		if (d != cached_d) {
+			cached_exponent = exp(aaDef::m_alDiv_omalp*d);
+			cached_d = d;
+		}
+		return ((i==j) ?  aaDef::alDiv_omalp*cached_exponent: aaDef::m_alDiv_omalp*cached_exponent);
 	}
 
 };
