@@ -414,8 +414,8 @@ void tree::getFromNodeToLeaves(vector<nodeP> &vec, const nodeP fromHereDown) con
 
 void tree::getAllHTUs(vector<nodeP> &vec, const nodeP fromHereDown ) const {
 	vec.clear();
-	if (fromHereDown->isLeaf()) return;
 	vec.push_back(fromHereDown);
+	if (fromHereDown->isLeaf()) return;
 
 
 	size_t pos = 0;
@@ -630,7 +630,6 @@ MDOUBLE tree::getAllBranchesLengthSum() {
 void tree::create_names_to_internal_nodes() {
 	vector<nodeP> htuVec;
 	getAllHTUs(htuVec,_root);
-
 	for (size_t i=0; i<htuVec.size(); ++i) {
 		string name = int2string(i+1);
 		htuVec[i]->setName((string)"N" + name);
@@ -1040,7 +1039,7 @@ bool tree::readPhylipTreeTopology(const vector<char>& tree_contents,vector<char>
 	int nextFreeID =0; // to give id's for nodes.
 	_leaves = GetNumberOfLeaves(tree_contents);
 	_root = new TreeNode(nextFreeID);
-	if (_leaves == 1) {// very special case of a tree that is only 1 leaf...
+	if (_leaves == 0) {// very special case of a tree that is only 1 leaf...
 		vector<char>::const_iterator itCurrent = tree_contents.begin();
 		itCurrent++;
 		_root->setName(getName(itCurrent));
