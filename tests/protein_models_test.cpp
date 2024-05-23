@@ -7,8 +7,8 @@
 
 
 int main() {
-    auto model = pupAll(datMatrixHolder::jones, 20); 
-    
+    auto model = pupAll(datMatrixHolder::wag, 20); 
+    std::cout << model.Qij(0,0) << "\n";
 
 
     double diagonal_sum = 0.0;
