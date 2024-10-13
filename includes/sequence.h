@@ -30,8 +30,14 @@ public:
 			errorMsg::reportError("must give a non Null alphabet when constructing sequences");
 		}
 		_alphabet = inAlph->clone();
+		if (_alphabet->size() == 4) _lostBits = 0;
+		if (_alphabet->size() == 20) _lostBits = 4;
+		if (_alphabet->size() == 61) _lostBits = 6;
+		_length = 0;
 	}
 	virtual ~sequence();
+
+	void push_back(const ALPHACHAR &charId);
 
 	size_t seqLen() const {return _vec.size();}
 	size_t seqLenSpecific() const; //return the number of sites that are isSpecific()
@@ -57,7 +63,11 @@ public:
 
 	inline sequence& operator=(const sequence& other);
 	inline sequence& operator+=(const sequence& other);
-	ALPHACHAR& operator[](const int i) {return _vec[i];}
+	ALPHACHAR& operator[](const int i) {
+		_vec[i]
+
+		return _vec[i];
+	}
 	const ALPHACHAR& operator[](const int pos) const {return _vec[pos];}
 
 	bool isUnknown(const int pos) const {return _vec[pos] == _alphabet->unknown();}
@@ -66,7 +76,12 @@ public:
 	bool isSpecific(const size_t pos) const {return _alphabet->isSpecific(_vec[pos]);}
 
 private: 
-	vector<ALPHACHAR> _vec;	
+	vector<uint64_t> _vec;
+	size_t _length;
+	size_t _charsPerInt64;
+	size_t _bitOffset;
+
+	size_t _lostBits;
 	const alphabet* _alphabet;
 	string _remark;
 	string _name;
@@ -87,7 +102,7 @@ public:
 		bool operator != (const Iterator& rhs){return (_pointer != rhs._pointer);}
 		bool operator == (const Iterator& rhs){return (_pointer == rhs._pointer);}
 	private:
-		vector<ALPHACHAR>::iterator _pointer;
+		vector<uint64_t>::iterator _pointer;
   };
 
 	class constIterator {

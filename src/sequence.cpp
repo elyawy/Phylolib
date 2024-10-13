@@ -14,6 +14,11 @@ sequence::sequence(const string& str,
 				   const alphabet* inAlph)
 : _alphabet(inAlph->clone()), _remark(remark), _name(name),_id(id) 
 {
+	if (_alphabet->size() == 4) _lostBits = 0;
+	if (_alphabet->size() == 20) _lostBits = 4;
+	if (_alphabet->size() == 61) _lostBits = 6;
+	
+	_length = 0;
 	for (size_t k=0; k < str.size() ;k += _alphabet->stringSize()) {
 		int charId = inAlph->fromChar(str, k);
 		if (charId == -99) {
@@ -25,6 +30,20 @@ sequence::sequence(const string& str,
 	}
 }
 
+void sequence::push_back(const ALPHACHAR &charId) {
+	size_t indexInVec = (_length / _charsPerInt64);
+	if (indexInVec >= _vec.size()) {
+		uint64_t x = charId;
+		_vec.push_back(x);
+		++_length;
+		return;
+	}
+	size_t posInInt64 = (_length % _charsPerInt64);
+	uint64_t x = _vec[indexInVec];
+	x = (x << _bitOffset) & charId;
+
+
+}
 
 sequence::sequence(const sequence& other) 
 : _vec(other._vec), _alphabet(other._alphabet->clone()), 
