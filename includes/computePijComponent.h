@@ -28,9 +28,9 @@ public:
 		return _V[let1][let2];
 	}
 
-
-	ALPHACHAR getRandomChar(const ALPHACHAR originLetter) const {
-		return _D[originLetter]->drawSample() - 1;
+	template<typename RngType = std::mt19937_64>
+	ALPHACHAR getRandomChar(const ALPHACHAR originLetter, RngType &rng) const {
+		return _D[originLetter]->drawSample(rng) - 1;
 	}
 	VVdouble _V; // let, let
 	std::vector<std::shared_ptr<DiscreteDistribution>> _D;
@@ -46,8 +46,9 @@ public:
 		return _V[nodeId].getPij(let1,let2);
 	}
 
-	ALPHACHAR getRandomChar(const int nodeId, const ALPHACHAR originLetter) const {
-		return _V[nodeId].getRandomChar(originLetter);
+template<typename RngType = std::mt19937_64>
+	ALPHACHAR getRandomChar(const int nodeId, const ALPHACHAR originLetter, RngType &rng) const {
+		return _V[nodeId].getRandomChar(originLetter, rng);
 	}
 
 	vector<computePijHomSpec> _V; // let, let
@@ -65,8 +66,9 @@ public:
 		return _V[rateCategor].getPij(nodeId,let1,let2);
 	}
 
-	ALPHACHAR getRandomChar(const int rateCategor,const int nodeId, const ALPHACHAR originLetter) const {
-		return _V[rateCategor].getRandomChar(nodeId,originLetter);
+	template<typename RngType = std::mt19937_64>
+	ALPHACHAR getRandomChar(const int rateCategor,const int nodeId, const ALPHACHAR originLetter, RngType &rng) const {
+		return _V[rateCategor].getRandomChar(nodeId,originLetter, rng);
 	}
 	computePijHom& operator[] (int i) {return _V[i];}
 	const computePijHom& operator[] (int i) const {return _V[i];}

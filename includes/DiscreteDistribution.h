@@ -15,14 +15,14 @@ class DiscreteDistribution
 private:
     std::vector<double> probabilities_;
     std::vector<int> alias_;
-    static std::random_device rd_;
-    static std::mt19937_64 rng_;
-    static std::uniform_real_distribution<double> biased_coin_;
+    // static std::random_device rd_;
+    // static std::mt19937_64 rng_;
+    std::uniform_real_distribution<double> biased_coin_;
     std::uniform_int_distribution<int> fair_die_;
 
 
 public:
-    DiscreteDistribution(const std::vector<double> &probabilities, double normalizingFactor=1.0) {
+    DiscreteDistribution(const std::vector<double> &probabilities, double normalizingFactor=1.0): biased_coin_(0.0, 1.0) {
         int n = probabilities.size();
         fair_die_ = std::uniform_int_distribution<int>(0, n-1);
 
@@ -70,9 +70,10 @@ public:
         }
     }
 
-    int drawSample() {
-        int die_roll = fair_die_(rng_);
-        if (biased_coin_(rng_) < probabilities_[die_roll]) return die_roll + 1;
+    template<typename RngType = std::mt19937_64>
+    int drawSample(RngType &rng) {
+        int die_roll = fair_die_(rng);
+        if (biased_coin_(rng) < probabilities_[die_roll]) return die_roll + 1;
         return alias_[die_roll] + 1;
     }
 
@@ -87,9 +88,9 @@ public:
         std::cout << "\n";
     }
 
-    static void setSeed(int seed) {
-        rng_ = std::mt19937_64(seed);
-    }
+    // static void setSeed(int seed) {
+    //     rng_ = std::mt19937_64(seed);
+    // }
 
     std::vector<std::pair<double, int>> getTable() {
         std::vector<std::pair<double, int>> prob_alias_table;
