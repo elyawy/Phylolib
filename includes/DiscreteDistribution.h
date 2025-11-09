@@ -71,7 +71,7 @@ public:
     }
 
     template<typename RngType = std::mt19937_64>
-    int drawSample(RngType &rng) {
+    inline int drawSample(RngType &rng) {
         int die_roll = fair_die_(rng);
         if (biased_coin_(rng) < probabilities_[die_roll]) return die_roll + 1;
         return alias_[die_roll] + 1;
