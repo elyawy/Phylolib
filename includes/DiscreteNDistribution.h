@@ -68,12 +68,11 @@ public:
     template<typename RngType = std::mt19937_64>
     int drawSample(RngType &rng) {
         uint64_t random_bits = rng();
-        int die_roll = random_bits % N;
-        double coin_flip = (random_bits >> 32) * 2.3283064365386963e-10;
+    int die_roll = random_bits % N;  // Uses lower ~5 bits for N=20
+    double coin_flip = ((random_bits >> 8) & 0xFFFFFFFF) * 2.3283064365386963e-10;  // Uses different bits
         
-        int result = alias_[die_roll];
-        if (coin_flip < probabilities_[die_roll]) result = die_roll;
-        return result + 1;
+        if (coin_flip < probabilities_[die_roll]) return die_roll + 1;
+        return alias_[die_roll] + 1;
     }
 
     void printTable() {
