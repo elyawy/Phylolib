@@ -16,13 +16,15 @@ private:
     std::array<double, N> probabilities_;
     std::array<int, N> alias_;
 
-    // std::uniform_real_distribution<double> biased_coin_;
-    // std::uniform_int_distribution<int> fair_die_;
+    std::uniform_real_distribution<double> biased_coin_;
+    std::uniform_int_distribution<int> fair_die_;
 
 
 public:
-    DiscreteNDistribution<N>(const std::vector<double> &probabilities, double normalizingFactor=1.0) {
+    DiscreteNDistribution<N>(const std::vector<double> &probabilities, double normalizingFactor=1.0) : biased_coin_(0.0,1.0) {
         assert(probabilities.size() == N);  // safety check
+        fair_die_ = std::uniform_int_distribution<int>(0, N-1);
+
 
         std::stack<std::pair<int, double>> small_;
         std::stack<std::pair<int, double>> large_;
@@ -68,8 +70,8 @@ public:
     template<typename RngType = std::mt19937_64>
     int drawSample(RngType &rng) {
         uint64_t random_bits = rng();
-    int die_roll = random_bits % N;  // Uses lower ~5 bits for N=20
-    double coin_flip = ((random_bits >> 8) & 0xFFFFFFFF) * 2.3283064365386963e-10;  // Uses different bits
+        int die_roll = fair_die_(rng);  // Uses lower ~5 bits for N=20
+        double coin_flip = biased_coin_(rng);//((random_bits >> 8) & 0xFFFFFFFF) * 2.3283064365386963e-10;  // Uses different bits
         
         if (coin_flip < probabilities_[die_roll]) return die_roll + 1;
         return alias_[die_roll] + 1;
