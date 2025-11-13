@@ -6,6 +6,35 @@
 #include <stack>
 #include <iostream>
 
+// Helper struct to split a single RNG call into uniform int and float
+template<uint32_t K>
+struct SplitRNG {
+    static_assert(K == 4 || K == 20 || K == 61, "K must be 4, 20, or 61");
+    
+    static constexpr int bits_for_int = 12;
+    static constexpr uint64_t int_mask = (1ULL << bits_for_int) - 1;
+    static constexpr int bits_for_float = 64 - bits_for_int;
+    static constexpr double float_divisor = (double)(1ULL << bits_for_float);
+    static constexpr uint64_t threshold = ((1ULL << bits_for_int) / K) * K;
+    
+    uint32_t integer;
+    double uniform_float;
+    
+    template<typename RNG>
+    explicit SplitRNG(RNG& rng) {
+        uint64_t rng_val = rng();
+        uint64_t candidate = rng_val & int_mask;
+        
+        while (candidate >= threshold) {
+            rng_val = rng();
+            candidate = rng_val & int_mask;
+        }
+        
+        integer = (uint32_t)(candidate % K);
+        uniform_float = (double)(rng_val >> bits_for_int) / float_divisor;
+    }
+};
+
 // Implementation of Vose's alias method, given a list of probabilities
 // representing a finite distribution builds a datastructure in O(n) time
 // that allows O(1) drawing from the distribution.
@@ -16,14 +45,9 @@ private:
     std::array<double, N> probabilities_;
     std::array<int, N> alias_;
 
-    std::uniform_real_distribution<double> biased_coin_;
-    std::uniform_int_distribution<int> fair_die_;
-
-
 public:
-    DiscreteNDistribution<N>(const std::vector<double> &probabilities, double normalizingFactor=1.0) : biased_coin_(0.0,1.0) {
+    DiscreteNDistribution<N>(const std::vector<double> &probabilities, double normalizingFactor=1.0) {
         assert(probabilities.size() == N);  // safety check
-        fair_die_ = std::uniform_int_distribution<int>(0, N-1);
 
 
         std::stack<std::pair<int, double>> small_;
@@ -69,12 +93,14 @@ public:
 
     template<typename RngType = std::mt19937_64>
     int drawSample(RngType &rng) {
-        uint64_t random_bits = rng();
-        int die_roll = fair_die_(rng);  // Uses lower ~5 bits for N=20
-        double coin_flip = biased_coin_(rng);//((random_bits >> 8) & 0xFFFFFFFF) * 2.3283064365386963e-10;  // Uses different bits
+        auto split = SplitRNG<N>(rng);
+
+        int die_roll = split.integer;  // Uses lower bits for N
+        double coin_flip = split.uniform_float;  // Uses different bits
         
-        if (coin_flip < probabilities_[die_roll]) return die_roll + 1;
-        return alias_[die_roll] + 1;
+        int result = alias_[die_roll];
+        if (coin_flip < probabilities_[die_roll]) result = die_roll;
+        return result + 1;
     }
 
     void printTable() {
