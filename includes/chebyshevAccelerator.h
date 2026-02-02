@@ -14,7 +14,20 @@ public:
 									const int totalNumOfCoef=60,
 									const int usingNumberOfCoef=13,
 	const MDOUBLE rightRange=0,const MDOUBLE leftRange=2);
-  chebyshevAccelerator(const chebyshevAccelerator& other);
+
+	// Constructor with precomputed coefficients for optimization
+	chebyshevAccelerator(
+		replacementModel* pb,
+		const VVVdouble& precomputed_coff,
+		const VVVdouble& precomputed_derv_coff,
+		const VVVdouble& precomputed_sec_derv_coff,
+		const int alphanetSize=20,
+		const int totalNumOfCoef=60,
+		const int usingNumberOfCoef=13,
+		const MDOUBLE rightRange=0,
+		const MDOUBLE leftRange=2
+	);
+  	chebyshevAccelerator(const chebyshevAccelerator& other);
 
 	const MDOUBLE Qij(const int i,const int j) const {return _pb->Qij(i,j);}
 
@@ -26,6 +39,10 @@ public:
 	virtual ~chebyshevAccelerator() {delete _pb;}
 	virtual replacementModel* getReplacementModel() const {return (_pb);}
 	virtual const size_t alphabetSize() const {return _pb->alphabetSize();}
+
+	const VVVdouble& getChebiCoff() const { return chebi_coff; }
+	const VVVdouble& getChebiDervCoff() const { return chebi_dervation_coff; }
+	const VVVdouble& getChebiSecDervCoff() const { return chebi_sec_dervation_coff; }
 
 private:
 	VVVdouble chebi_coff;//[N_ABC][N_ABC][NUMBER_OF_TOTAL_COFF+1];

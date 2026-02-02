@@ -78,6 +78,30 @@ chebyshevAccelerator::chebyshevAccelerator(
 	}
 }
 
+// Constructor with precomputed coefficients - skips expensive chebft() computation
+chebyshevAccelerator::chebyshevAccelerator(
+	replacementModel* pb,
+	const VVVdouble& precomputed_coff,
+	const VVVdouble& precomputed_derv_coff,
+	const VVVdouble& precomputed_sec_derv_coff,
+	const int alphanetSize,
+	const int totalNumOfCoef,
+	const int usingNumberOfCoef,
+	const MDOUBLE rightRange,
+	const MDOUBLE leftRange
+	): _alphabetSize(alphanetSize),
+	_totalNumOfCoef(totalNumOfCoef),
+	_usingNumberOfCoef(usingNumberOfCoef),
+	_pb(pb->clone()),
+	_rightRange(rightRange),
+	_leftRange(leftRange)
+{
+	// Simply copy the precomputed coefficients - no expensive computation needed
+	chebi_coff = precomputed_coff;
+	chebi_dervation_coff = precomputed_derv_coff;
+	chebi_sec_dervation_coff = precomputed_sec_derv_coff;
+}
+
 
 void chebyshevAccelerator::chebft(Vdouble& c, int n, int from_aa, int to_aa) {
 //----------------------------------------------------------------------------------
