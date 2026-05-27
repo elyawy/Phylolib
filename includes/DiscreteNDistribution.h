@@ -7,31 +7,27 @@
 #include <iostream>
 
 // Helper struct to split a single RNG call into uniform int and float
-template<uint32_t K>
+// K can only be a power of two, So we only need to mask the lower bits for the integer part, and use the upper bits for the float part.
+// For example, if K=32, we can use the lower 5 bits for the integer (0-31) and the upper bits for the float (0.0-1.0).
+// Since we get 64bits we can split up into two 32bits.
+// each 32bits can be used for the integer part and the float part respectively, so we can use the lower 5 bits of the integer part for K=32, and the upper 27 bits for the float part, which gives us a very high precision for the float part.
+// more specifically, we get at worst 1/(2^26) precision for the float part, which is more than enough for our use case.
+template<uint8_t K>
 struct SplitRNG {
-    static_assert(K == 4 || K == 20 || K == 61, "K must be 4, 20, or 61");
+    static_assert(K == 4 || K == 32 || K == 64, "K must be 4, 32, or 64");
     
-    static constexpr int bits_for_int = 12;
-    static constexpr uint64_t int_mask = (1ULL << bits_for_int) - 1;
-    static constexpr int bits_for_float = 64 - bits_for_int;
-    static constexpr double float_divisor = (double)(1ULL << bits_for_float);
-    static constexpr uint64_t threshold = ((1ULL << bits_for_int) / K) * K;
+    static constexpr uint64_t int_mask = K - 1;  // Mask to extract the integer part
+    static constexpr uint8_t bits_for_int = __builtin_ctz(K);  // Number of bits needed for the integer part
+    static constexpr double divisor = 1ULL << (64 - bits_for_int);  // Divisor to scale the float part to [0.0, 1.0)
     
-    uint32_t integer;
-    double uniform_float;
+    uint8_t integer;
+    double uniform;
+
     
-    template<typename RNG>
-    explicit SplitRNG(RNG& rng) {
-        uint64_t rng_val = rng();
-        uint64_t candidate = rng_val & int_mask;
-        
-        while (candidate >= threshold) {
-            rng_val = rng();
-            candidate = rng_val & int_mask;
-        }
-        
-        integer = (uint32_t)(candidate % K);
-        uniform_float = (double)(rng_val >> bits_for_int) / float_divisor;
+    explicit SplitRNG(uint64_t rng_val) {
+
+        integer = rng_val & int_mask;                          // take low bits
+        uniform= (rng_val >> bits_for_int) / divisor;  // take remaining high bits
     }
 };
 
@@ -42,8 +38,8 @@ template<size_t N>
 class DiscreteNDistribution
 {
 private:
-    std::array<double, N> probabilities_;
-    std::array<int, N> alias_;
+    std::array<double,   N> probabilities_;
+    std::array<uint8_t, N> alias_;
 
 public:
     DiscreteNDistribution<N>(const std::vector<double> &probabilities, double normalizingFactor=1.0) {
@@ -93,15 +89,25 @@ public:
 
     template<typename RngType = std::mt19937_64>
     int drawSample(RngType &rng) {
-        auto split = SplitRNG<N>(rng);
+        // split 64 bits into two 32 bits
+        uint32_t intToSplit;
 
-        int die_roll = split.integer;  // Uses lower bits for N
-        double coin_flip = split.uniform_float;  // Uses different bits
+        uint64_t full64Bits = rng();
+
+        SplitRNG<N> split(full64Bits);
+
+        uint8_t die_roll = split.integer;  // Uses lower bits for N
+        double coin_flip = split.uniform;  // Uses different bits
         
         int result = alias_[die_roll];
-        if (coin_flip < probabilities_[die_roll]) result = die_roll;
+        int keep_original = (coin_flip < probabilities_[die_roll]); 
+
+        int mask = -keep_original; // will be 0xFF..FF if keep_original is true, 0x00..00 if false
+        result = (result & ~mask) | (die_roll & mask); // if keep_original is true, keep die_roll, else use alias result
+
         return result + 1;
     }
+
 
     void printTable() {
         for(auto &i: probabilities_){
@@ -114,9 +120,7 @@ public:
         std::cout << "\n";
     }
 
-    // static void setSeed(int seed) {
-    //     rng_ = std::mt19937_64(seed);
-    // }
+
 
     std::vector<std::pair<double, int>> getTable() {
         std::vector<std::pair<double, int>> prob_alias_table;
