@@ -88,7 +88,7 @@ public:
     }
 
     template<typename RngType = std::mt19937_64>
-    int drawSample(RngType &rng) {
+    int drawSample(RngType &rng) const {
         // split 64 bits into two 32 bits
         uint32_t intToSplit;
 
