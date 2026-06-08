@@ -42,48 +42,44 @@ private:
     std::array<uint8_t, N> alias_;
 
 public:
-    DiscreteNDistribution<N>(const std::vector<double> &probabilities, double normalizingFactor=1.0) {
-        assert(probabilities.size() == N);  // safety check
+    DiscreteNDistribution<N>(const std::array<double, N> &probabilities, double normalizingFactor=1.0) {
+        assert(probabilities.size() == N);
 
-
-        std::stack<std::pair<int, double>> small_;
-        std::stack<std::pair<int, double>> large_;
-
+        std::pair<int, double> small_buf[N];
+        std::pair<int, double> large_buf[N];
+        int small_top = 0, large_top = 0;
 
         for(int i = 0; i < N; i++) {
-            double scaled_prob = N*probabilities[i]*normalizingFactor;
-            std::pair<int, double> current_prob(i, scaled_prob);
-            if (current_prob.second < 1) {
-                small_.push(current_prob);
+            double scaled_prob = N * probabilities[i] * normalizingFactor;
+            if (scaled_prob < 1.0) {
+                small_buf[small_top++] = {i, scaled_prob};
             } else {
-                large_.push(current_prob);
+                large_buf[large_top++] = {i, scaled_prob};
             }
         }
-        while (!small_.empty() && !large_.empty()) {
-            std::pair<int, double> s = small_.top();
-            std::pair<int, double> l = large_.top();
-            small_.pop();
-            large_.pop();
+
+        while (small_top > 0 && large_top > 0) {
+            auto s = small_buf[--small_top];
+            auto l = large_buf[--large_top];
 
             probabilities_[s.first] = s.second;
             alias_[s.first] = l.first;
 
-            l.second = (l.second + s.second) - 1;
-            if(l.second < 1) {
-                small_.push(l);
+            l.second = (l.second + s.second) - 1.0;
+            if (l.second < 1.0) {
+                small_buf[small_top++] = l;
             } else {
-                large_.push(l);
+                large_buf[large_top++] = l;
             }
         }
-        while (!large_.empty()) {
-            std::pair<int, double> l = large_.top();
-            large_.pop();
-            probabilities_[l.first] = 1;
+
+        while (large_top > 0) {
+            auto l = large_buf[--large_top];
+            probabilities_[l.first] = 1.0;
         }
-        while (!small_.empty()) {
-            std::pair<int, double> s = small_.top();
-            small_.pop();
-            probabilities_[s.first] = 1;
+        while (small_top > 0) {
+            auto s = small_buf[--small_top];
+            probabilities_[s.first] = 1.0;
         }
     }
 
