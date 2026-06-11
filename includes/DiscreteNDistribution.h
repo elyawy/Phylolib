@@ -16,8 +16,14 @@ template<uint8_t K>
 struct SplitRNG {
     static_assert(K == 4 || K == 32 || K == 64, "K must be 4, 32, or 64");
     
+    static constexpr uint8_t ctz(uint64_t v) {
+        uint8_t count = 0;
+        while ((v & 1) == 0) { v >>= 1; ++count; }
+        return count;
+    }
+
     static constexpr uint64_t int_mask = K - 1;  // Mask to extract the integer part
-    static constexpr uint8_t bits_for_int = __builtin_ctz(K);  // Number of bits needed for the integer part
+    static constexpr uint8_t bits_for_int = ctz(K);  // Number of bits needed for the integer part
     static constexpr double divisor = 1ULL << (64 - bits_for_int);  // Divisor to scale the float part to [0.0, 1.0)
     
     uint8_t integer;
