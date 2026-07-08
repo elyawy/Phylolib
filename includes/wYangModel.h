@@ -18,7 +18,7 @@ public:
 			delete _coAlpha;
 	}
 
-	const size_t alphabetSize() const {return _freq.size();}
+	const size_t alphabetSize() const {return _coAlpha->size();}
 
 	const MDOUBLE Qij(const int i,const int j) const {return dPij_dt(i,j,0);}// implement
 
