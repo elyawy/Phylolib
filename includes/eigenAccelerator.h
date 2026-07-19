@@ -9,19 +9,6 @@
 #include <limits>
 #include <cassert>
 
-// Accelerates P(t) computation using eigen decomposition of Q.
-//
-// At construction: decomposes Q into L, eigenvalues λ, R such that
-//   P(t) = L · diag(exp(λ*t)) · R
-//
-// Per distinct t:
-//   1. Scale rows of R by exp(λk * t)  (N exp calls)
-//   2. P = L · R_scaled               (N×N matrix multiply)
-//
-// L and R are stored as flat stack-friendly N×N arrays (no heap).
-// The full matrix is cached; Pij_t(i,j,t) refills only when t changes.
-// N is a compile-time constant, enabling loop unrolling and auto-vectorization.
-
 template<int N>
 class eigenAccelerator : public pijAccelerator {
 public:
@@ -90,34 +77,40 @@ private:
 
     void refill(const MDOUBLE t) const
     {
-        // Step 1: R_scaled[k][j] = R[k][j] * exp(λk * t)
-        double R_scaled[N][N];
+        // 1D local array guarantees no pointer aliasing
+        double tmp[N * N] = {0.0};
+
+        // Outer product loop order: k, i, j
         for (int k = 0; k < N; ++k) {
             const double ek = std::exp(_eigenVec[k] * t);
-            for (int j = 0; j < N; ++j)
-                R_scaled[k][j] = _R[k][j] * ek;
+            for (int i = 0; i < N; ++i) {
+                const double L_scaled = _L[i][k] * ek;
+                // Direct pointer math for the inner loop to force contiguous vectorization
+                double* row_tmp = &tmp[i * N];
+                const double* row_R = _R[k]; 
+                
+                for (int j = 0; j < N; ++j) {
+                    row_tmp[j] += L_scaled * row_R[j];
+                }
+            }
         }
 
-        // Step 2: P = L * R_scaled
-        for (int i = 0; i < N; ++i)
+        // Copy back to class member
+        for (int i = 0; i < N; ++i) {
             for (int j = 0; j < N; ++j) {
-                double sum = 0.0;
-                for (int k = 0; k < N; ++k)
-                    sum += _L[i][k] * R_scaled[k][j];
-                _mat[i][j] = sum;
+                _mat[i][j] = tmp[i * N + j];
             }
+        }
 
         _cachedT = t;
     }
 
     replacementModel* _pb;
 
-    // Eigen decomposition — flat 2D arrays, stack-friendly
-    double _eigenVec[N];     // eigenvalues λ[k]
-    double _L[N][N];         // left eigenvectors  L[i][k]
-    double _R[N][N];         // right eigenvectors R[k][j]
+    double _eigenVec[N];
+    double _L[N][N];
+    double _R[N][N];
 
-    // Cached P(t) matrix and the t it was computed for
     mutable double  _mat[N][N];
     mutable MDOUBLE _cachedT;
 };
