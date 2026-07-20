@@ -14,8 +14,7 @@ class eigenAccelerator : public pijAccelerator {
 public:
     explicit eigenAccelerator(const replacementModel* pb)
         : _pb(pb->clone()),
-          _cachedT(std::numeric_limits<MDOUBLE>::quiet_NaN()),
-          _cachedRowIdx(-1)
+          _cachedT(std::numeric_limits<MDOUBLE>::quiet_NaN())
     {
         assert(pb->alphabetSize() == N);
         buildDecomp();
@@ -23,55 +22,26 @@ public:
 
     eigenAccelerator(const eigenAccelerator& other)
         : _pb(other._pb ? other._pb->clone() : nullptr),
-          _cachedT(other._cachedT),
-          _cachedRowIdx(other._cachedRowIdx)
+          _cachedT(other._cachedT)
     {
         for (int i = 0; i < N; ++i) {
             _eigenVec[i] = other._eigenVec[i];
-            _cachedExp[i] = other._cachedExp[i];
-            _cachedRow[i] = other._cachedRow[i];
             for (int j = 0; j < N; ++j) {
                 _L[i][j]   = other._L[i][j];
                 _R[i][j]   = other._R[i][j];
+                _mat[i][j] = other._mat[i][j];
             }
         }
     }
 
     const MDOUBLE Qij(const int i, const int j) const { return _pb->Qij(i, j); }
 
-    void fillPijRow(const int i, const double t, double* outRow) const override {
-        // 1. Refresh exponent cache if the branch time/rate state changes
-        if (t != _cachedT) {
-            for (int k = 0; k < N; ++k) {
-                _cachedExp[k] = std::exp(_eigenVec[k] * t);
-            }
-            _cachedT = t;
-        }
-
-        // 2. Clear outRow buffer
-        for (int col = 0; col < N; ++col) {
-            outRow[col] = 0.0;
-        }
-
-        // 3. Vectorized row math: O(N^2) instead of O(N^3)
-        const double* const row_L = _L[i];
-        for (int k = 0; k < N; ++k) {
-            const double L_scaled = row_L[k] * _cachedExp[k];
-            const double* const row_R = _R[k];
-            
-            // Loop unrolls and vectorizes flawlessly with SIMD alignment
-            for (int col = 0; col < N; ++col) {
-                outRow[col] += L_scaled * row_R[col];
-            }
-        }
+    inline const MDOUBLE Pij_t(const int i, const int j, const MDOUBLE t) const {
+        if (t != _cachedT) refill(t);
+        return _mat[i][j];
     }
 
-    // Preserve scalar compliance for backward compatibility 
-    inline const MDOUBLE Pij_t(const int i, const int j, const MDOUBLE t) const override {
-        double tmpRow[N];
-        fillPijRow(i, t, tmpRow);
-        return tmpRow[j];
-    }
+
     const MDOUBLE dPij_dt  (const int i, const int j, const MDOUBLE t) const { return _pb->dPij_dt(i, j, t); }
     const MDOUBLE d2Pij_dt2(const int i, const int j, const MDOUBLE t) const { return _pb->d2Pij_dt2(i, j, t); }
 
@@ -106,17 +76,44 @@ private:
         }
     }
 
+    void refill(const MDOUBLE t) const
+    {
+        // 1D local array guarantees no pointer aliasing
+        double tmp[N * N] = {0.0};
+
+        // Outer product loop order: k, i, j
+        for (int k = 0; k < N; ++k) {
+            const double ek = std::exp(_eigenVec[k] * t);
+            for (int i = 0; i < N; ++i) {
+                const double L_scaled = _L[i][k] * ek;
+                // Direct pointer math for the inner loop to force contiguous vectorization
+                double* row_tmp = &tmp[i * N];
+                const double* row_R = _R[k]; 
+                
+                for (int j = 0; j < N; ++j) {
+                    row_tmp[j] += L_scaled * row_R[j];
+                }
+            }
+        }
+
+        // Copy back to class member
+        for (int i = 0; i < N; ++i) {
+            for (int j = 0; j < N; ++j) {
+                _mat[i][j] = tmp[i * N + j];
+            }
+        }
+
+        _cachedT = t;
+    }
+
     replacementModel* _pb;
+
     double _eigenVec[N];
     double _L[N][N];
     double _R[N][N];
 
-    mutable double  _cachedExp[N];
+    mutable double  _mat[N][N];
     mutable MDOUBLE _cachedT;
-
-    // Row buffer states
-    mutable double  _cachedRow[N];
-    mutable int     _cachedRowIdx;
 };
 
 #endif
